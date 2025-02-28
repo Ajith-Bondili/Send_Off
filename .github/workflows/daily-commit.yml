@@ -1,0 +1,66 @@
+name: Daily Commit
+
+on:
+  # schedule:
+  # - cron: '04 17 * * *'  # Runs at 4 PM UTC daily
+  workflow_dispatch:
+
+
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+    env:
+      NO_COMMIT_CHANCE: 20  # 20% chance of NOT committing (adjust as needed)
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+      
+      - name: Check if already committed today
+        id: check_commit
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          if git log --since="${TODAY} 00:00:00" --pretty=format:"%h" | grep -q .; then
+            echo "already_committed=true" >> $GITHUB_OUTPUT
+          else
+            echo "already_committed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Decide whether to commit (random chance)
+        id: commit_decision
+        if: steps.check_commit.outputs.already_committed == 'false'
+        run: |
+          # Generate random number between 0 and 99
+          RANDOM_NUM=$(( $RANDOM % 100 ))
+          echo "Random number: $RANDOM_NUM, NO_COMMIT_CHANCE: $NO_COMMIT_CHANCE"
+          
+          if [[ $RANDOM_NUM -lt $NO_COMMIT_CHANCE ]]; then
+            echo "Skipping commit due to random chance"
+            echo "skip_commit=true" >> $GITHUB_OUTPUT
+          else
+            echo "Proceeding with commit"
+            echo "skip_commit=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create multiple random commits
+        if: steps.check_commit.outputs.already_committed == 'false' && steps.commit_decision.outputs.skip_commit == 'false'
+        run: |
+          # Generate random number between 1 and 9
+          COMMITS=$(( $RANDOM % 9 + 1 ))
+          echo "Creating $COMMITS commits"
+          
+          # Create that many commits
+          for i in $(seq 1 $COMMITS); do
+            echo "$(date) - Commit $i of $COMMITS" > commit_bot.txt
+            git add commit_bot.txt
+            git commit -m "Update commit_bot.txt (${i}/${COMMITS})"
+            sleep 1  # Add small delay between commits
+          done
+          
+          # Push all commits
+          git push
